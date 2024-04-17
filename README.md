@@ -1,6 +1,7 @@
 # Binary greedy mesher demo
 A voxel engine project highlighting a 🔥 blazingly 🔥 fast binary greedy mesher.
 Written with Rust utilizing [bevy game engine](https://github.com/bevyengine/bevy).
+![](screenshot.png)
 
 ## benchmarks
 There are various benchmarks implemented, but only 2 are enabled. (A simple culled mesher VS the binary greedy mesher).
