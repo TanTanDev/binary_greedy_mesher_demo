@@ -76,26 +76,20 @@ impl ChunksRefs {
     ///! helper function to get block data that may exceed the bounds of the middle chunk
     ///! input position is local pos to middle chunk
     pub fn get_block(&self, pos: IVec3) -> &BlockData {
-        let (x_chunk, x) = match pos.x < 0 {
-            true => (0, 32 + pos.x),
-            false => match pos.x >= 32 {
-                true => (2, pos.x - 32),
-                false => (1, pos.x),
-            },
+        let (x_chunk, x) = match pos.x {
+            ..=-1 => (0, 32 + pos.x),
+            32.. => (2, pos.x - 32),
+            _ => (1, pos.x),
         };
-        let (y_chunk, y) = match pos.y < 0 {
-            true => (0, 32 + pos.y),
-            false => match pos.y >= 32 {
-                true => (2, pos.y - 32),
-                false => (1, pos.y),
-            },
+        let (y_chunk, y) = match pos.y {
+            ..=-1 => (0, 32 + pos.y),
+            32.. => (2, pos.y - 32),
+            _ => (1, pos.y),
         };
-        let (z_chunk, z) = match pos.z < 0 {
-            true => (0, 32 + pos.z),
-            false => match pos.z >= 32 {
-                true => (2, pos.z - 32),
-                false => (1, pos.z),
-            },
+        let (z_chunk, z) = match pos.z {
+            ..=-1 => (0, 32 + pos.z),
+            32.. => (2, pos.z - 32),
+            _ => (1, pos.z),
         };
         let chunk_index = vec3_to_index(IVec3::new(x_chunk, y_chunk, z_chunk), 3);
         let chunk_data = &self.chunks[chunk_index];
