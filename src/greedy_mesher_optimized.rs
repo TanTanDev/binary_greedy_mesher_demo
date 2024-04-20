@@ -27,9 +27,9 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
     let mut col_face_masks = [0u64; 3 * CHUNK_SIZE_P2 * 2];
 
-    for y in 0..CHUNK_SIZE_P {
-        for z in 0..CHUNK_SIZE_P {
-            for x in 0..CHUNK_SIZE_P {
+    for x in 0..CHUNK_SIZE_P {
+        for y in 0..CHUNK_SIZE_P {
+            for z in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
                 let b = chunks_refs.get_block(pos);
                 if b.block_type.is_solid() {
