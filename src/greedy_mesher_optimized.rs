@@ -22,11 +22,10 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
     let mut mesh = ChunkMesh::default();
 
     // solid binary for each x,y,z axis (3)
-    let mut axis_cols: Vec<u64> = vec![0u64; 3 * CHUNK_SIZE_P3];
+    let mut axis_cols = [0u64; CHUNK_SIZE_P2 * 3];
     // 3 axises * chunk_sizep3  * (ascending or descending)
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
-    let mut col_face_masks: Vec<u64> = vec![0u64; 3 * CHUNK_SIZE_P3 * 2];
-
+    let mut col_face_masks = [0u64; 3 * CHUNK_SIZE_P2 * 2];
     for y in 0..CHUNK_SIZE_P {
         for z in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
