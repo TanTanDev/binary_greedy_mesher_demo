@@ -22,10 +22,11 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
     let mut mesh = ChunkMesh::default();
 
     // solid binary for each x,y,z axis (3)
-    let mut axis_cols = [0u64; CHUNK_SIZE_P2 * 3];
+    let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
     // 3 axises * chunk_sizep3  * (ascending or descending)
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
     let mut col_face_masks = [0u64; 3 * CHUNK_SIZE_P2 * 2];
+
     for y in 0..CHUNK_SIZE_P {
         for z in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
@@ -33,11 +34,11 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
                 let b = chunks_refs.get_block(pos);
                 if b.block_type.is_solid() {
                     // x,z - y axis
-                    axis_cols[x + (z * CHUNK_SIZE_P)] |= 1u64 << y as u64;
+                    axis_cols[0][z][x] |= 1u64 << y as u64;
                     // z,y - x axis
-                    axis_cols[z + (y * CHUNK_SIZE_P) + CHUNK_SIZE_P2] |= 1u64 << x as u64;
+                    axis_cols[1][y][z] |= 1u64 << x as u64;
                     // x,y - z axis
-                    axis_cols[x + (y * CHUNK_SIZE_P) + CHUNK_SIZE_P2 * 2] |= 1u64 << z as u64;
+                    axis_cols[2][y][x] |= 1u64 << z as u64;
                 }
             }
         }
@@ -45,14 +46,18 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
 
     // face culling
     for axis in 0..3 {
-        for i in 0..CHUNK_SIZE_P2 {
-            // set if current is solid, and next is air
-            let col = axis_cols[(CHUNK_SIZE_P2 * axis) + i];
+        for i in 0..CHUNK_SIZE_P {
+            for j in 0..CHUNK_SIZE_P {
+                // set if current is solid, and next is air
+                let col = axis_cols[axis][i][j];
 
-            // sample ascending axis, and set true when air meets solid
-            col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 1)) + i] = col & !(col >> 1);
-            // sample descending axis, and set true when air meets solid
-            col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 0)) + i] = col & !(col << 1);
+                // sample ascending axis, and set true when air meets solid
+                col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 1)) + i * CHUNK_SIZE_P + j] =
+                    col & !(col >> 1);
+                // sample descending axis, and set true when air meets solid
+                col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 0)) + i * CHUNK_SIZE_P + j] =
+                    col & !(col << 1);
+            }
         }
     }
     // greedy meshing planes for every axis (6)
