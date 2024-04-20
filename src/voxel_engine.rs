@@ -116,31 +116,31 @@ fn setup_diagnostics(mut onscreen: ResMut<ScreenDiagnostics>) {
     onscreen
         .add("load_data_queue".to_string(), DIAG_LOAD_DATA_QUEUE)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>4.0}"));
     onscreen
         .add("unload_data_queue".to_string(), DIAG_UNLOAD_DATA_QUEUE)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>3.0}"));
     onscreen
         .add("load_mesh_queue".to_string(), DIAG_LOAD_MESH_QUEUE)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>4.0}"));
     onscreen
         .add("unload_mesh_queue".to_string(), DIAG_UNLOAD_MESH_QUEUE)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>3.0}"));
     onscreen
         .add("vertex_count".to_string(), DIAG_VERTEX_COUNT)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>7.0}"));
     onscreen
         .add("mesh_tasks".to_string(), DIAG_MESH_TASKS)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>4.0}"));
     onscreen
         .add("data_tasks".to_string(), DIAG_DATA_TASKS)
         .aggregate(Aggregate::Value)
-        .format(|v| format!("{v:.0}"));
+        .format(|v| format!("{v:0>2.0}"));
 }
 
 fn diagnostics_count(mut diagnostics: Diagnostics, voxel_engine: Res<VoxelEngine>) {
