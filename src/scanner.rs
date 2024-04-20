@@ -71,7 +71,7 @@ impl Scanner {
             mesh_sampling_offsets,
             mesh_offset: 0,
             unresolved_data_load: Vec::default(),
-            prev_chunk_pos: IVec3::MAX,
+            prev_chunk_pos: IVec3::new(777,777,777),
             unresolved_mesh_load: Vec::default(),
             unresolved_data_unload: VecDeque::default(),
             unresolved_mesh_unload: VecDeque::default(),
