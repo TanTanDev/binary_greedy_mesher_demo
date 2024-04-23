@@ -306,7 +306,7 @@ pub fn start_mesh_tasks(
         let llod = *lod;
         let task = match meshing_method {
             MeshingMethod::BinaryGreedyMeshing => task_pool.spawn(async move {
-                crate::greedy_mesher_optimized::build_chunk_mesh(chunks_refs, llod)
+                crate::greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, llod)
             }),
             MeshingMethod::VertexCulled => task_pool.spawn(async move {
                 crate::culled_mesher::build_chunk_mesh_ao(&chunks_refs, llod)

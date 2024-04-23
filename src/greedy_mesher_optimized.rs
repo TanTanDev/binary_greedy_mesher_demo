@@ -11,10 +11,10 @@ use crate::{
     constants::{ADJACENT_AO_DIRS, CHUNK_SIZE, CHUNK_SIZE_P, CHUNK_SIZE_P2, CHUNK_SIZE_P3},
     face_direction::FaceDir,
     lod::Lod,
-    utils::{generate_indices, make_vertex_u32},
+    utils::{generate_indices, make_vertex_u32, vec3_to_index},
 };
 
-pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> {
+pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh> {
     // early exit, if all faces are culled
     if chunks_refs.is_all_voxels_same() {
         return None;
@@ -22,42 +22,93 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
     let mut mesh = ChunkMesh::default();
 
     // solid binary for each x,y,z axis (3)
-    let mut axis_cols: Vec<u64> = vec![0u64; 3 * CHUNK_SIZE_P3];
-    // 3 axises * chunk_sizep3  * (ascending or descending)
-    // the cull mask to perform greedy slicing, based on solids on previous axis_cols
-    let mut col_face_masks: Vec<u64> = vec![0u64; 3 * CHUNK_SIZE_P3 * 2];
+    let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
 
-    for y in 0..CHUNK_SIZE_P {
-        for z in 0..CHUNK_SIZE_P {
+    // the cull mask to perform greedy slicing, based on solids on previous axis_cols
+    let mut col_face_masks = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+
+    #[inline]
+    fn add_voxel_to_axis_cols(
+        b: &crate::voxel::BlockData,
+        x: usize,
+        y: usize,
+        z: usize,
+        axis_cols: &mut [[[u64; 34]; 34]; 3],
+    ) {
+        if b.block_type.is_solid() {
+            // x,z - y axis
+            axis_cols[0][z][x] |= 1u64 << y as u64;
+            // z,y - x axis
+            axis_cols[1][y][z] |= 1u64 << x as u64;
+            // x,y - z axis
+            axis_cols[2][y][x] |= 1u64 << z as u64;
+        }
+    }
+
+    // inner chunk voxels.
+    let chunk = &*chunks_refs.chunks[vec3_to_index(IVec3::new(1, 1, 1), 3)];
+    assert!(chunk.voxels.len() == CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE || chunk.voxels.len() == 1);
+    for z in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                let i = match chunk.voxels.len() {
+                    1 => 0,
+                    _ => (z * CHUNK_SIZE + y) * CHUNK_SIZE + x,
+                };
+                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols)
+            }
+        }
+    }
+
+    // neighbor chunk voxels.
+    // note(leddoo): couldn't be bothered to optimize these.
+    //  might be worth it though. together, they take
+    //  almost as long as the entire "inner chunk" loop.
+    for z in [0, CHUNK_SIZE_P - 1] {
+        for y in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
                 let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                let b = chunks_refs.get_block(pos);
-                if b.block_type.is_solid() {
-                    // x,z - y axis
-                    axis_cols[x + (z * CHUNK_SIZE_P)] |= 1u64 << y as u64;
-                    // z,y - x axis
-                    axis_cols[z + (y * CHUNK_SIZE_P) + CHUNK_SIZE_P2] |= 1u64 << x as u64;
-                    // x,y - z axis
-                    axis_cols[x + (y * CHUNK_SIZE_P) + CHUNK_SIZE_P2 * 2] |= 1u64 << z as u64;
-                }
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
+            }
+        }
+    }
+    for z in 0..CHUNK_SIZE_P {
+        for y in [0, CHUNK_SIZE_P - 1] {
+            for x in 0..CHUNK_SIZE_P {
+                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
+            }
+        }
+    }
+    for z in 0..CHUNK_SIZE_P {
+        for x in [0, CHUNK_SIZE_P - 1] {
+            for y in 0..CHUNK_SIZE_P {
+                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
+                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
             }
         }
     }
 
     // face culling
     for axis in 0..3 {
-        for i in 0..CHUNK_SIZE_P2 {
-            // set if current is solid, and next is air
-            let col = axis_cols[(CHUNK_SIZE_P2 * axis) + i];
+        for z in 0..CHUNK_SIZE_P {
+            for x in 0..CHUNK_SIZE_P {
+                // set if current is solid, and next is air
+                let col = axis_cols[axis][z][x];
 
-            // sample ascending axis, and set true when air meets solid
-            col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 1)) + i] = col & !(col >> 1);
-            // sample descending axis, and set true when air meets solid
-            col_face_masks[(CHUNK_SIZE_P2 * (axis * 2 + 0)) + i] = col & !(col << 1);
+                // sample descending axis, and set true when air meets solid
+                col_face_masks[2 * axis + 0][z][x] = col & !(col << 1);
+                // sample ascending axis, and set true when air meets solid
+                col_face_masks[2 * axis + 1][z][x] = col & !(col >> 1);
+            }
         }
     }
+
     // greedy meshing planes for every axis (6)
     // key(block + ao) -> HashMap<axis(0-32), binary_plane>
+    // note(leddoo): don't ask me how this isn't a massive blottleneck.
+    //  might become an issue in the future, when there are more block types.
+    //  consider using a single hashmap with key (axis, block_hash, y).
     let mut data: [HashMap<u32, HashMap<u32, [u32; 32]>>; 6];
     data = [
         HashMap::new(),
@@ -73,12 +124,12 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
                 // skip padded by adding 1(for x padding) and (z+1) for (z padding)
-                let col_index = 1 + x + ((z + 1) * CHUNK_SIZE_P) + CHUNK_SIZE_P2 * axis;
+                let mut col = col_face_masks[axis][z + 1][x + 1];
 
                 // removes the right most padding value, because it's invalid
-                let col = col_face_masks[col_index] >> 1;
+                col >>= 1;
                 // removes the left most padding value, because it's invalid
-                let mut col = col & !(1 << CHUNK_SIZE as u64);
+                col &= !(1 << CHUNK_SIZE as u64);
 
                 while col != 0 {
                     let y = col.trailing_zeros();
@@ -127,7 +178,6 @@ pub fn build_chunk_mesh(chunks_refs: ChunksRefs, lod: Lod) -> Option<ChunkMesh> 
     }
 
     let mut vertices = vec![];
-    // for (index, data) in data.into_iter() {}
     for (axis, block_ao_data) in data.into_iter().enumerate() {
         let facedir = match axis {
             0 => FaceDir::Down,
