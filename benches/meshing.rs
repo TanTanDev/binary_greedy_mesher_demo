@@ -22,7 +22,7 @@ fn bench_mesh_no_ao(chunks_refs: ChunksRefs) {
 }
 
 fn binary_mesh_optimized(chunks_refs: ChunksRefs) {
-    let m = greedy_mesher_optimized::build_chunk_mesh(chunks_refs, Lod::L32);
+    let m = greedy_mesher_optimized::build_chunk_mesh(&chunks_refs, Lod::L32);
 }
 
 fn culled_mesh_ao(chunks_refs: ChunksRefs) {
