@@ -22,7 +22,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     let mut mesh = ChunkMesh::default();
 
     // solid binary for each x,y,z axis (3)
-    let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
+    let mut axis_cols = [[[0u64; CHUNK_SIZE]; CHUNK_SIZE]; 3];
 
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
     let mut col_face_masks = [[[0u32; CHUNK_SIZE]; CHUNK_SIZE]; 6];
@@ -33,15 +33,39 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         x: usize,
         y: usize,
         z: usize,
-        axis_cols: &mut [[[u64; 34]; 34]; 3],
+        axis_cols: &mut [[[u64; CHUNK_SIZE]; CHUNK_SIZE]; 3],
     ) {
         if b.block_type.is_solid() {
             // x,z - y axis
-            axis_cols[0][z][x] |= 1u64 << y as u64;
+            axis_cols[0][z][x] |= 1u64 << (y + 1) as u64;
             // z,y - x axis
-            axis_cols[1][y][z] |= 1u64 << x as u64;
+            axis_cols[1][y][z] |= 1u64 << (x + 1) as u64;
             // x,y - z axis
-            axis_cols[2][y][x] |= 1u64 << z as u64;
+            axis_cols[2][y][x] |= 1u64 << (z + 1) as u64;
+        }
+    }
+
+    #[inline]
+    fn add_neighbour_voxel_to_axis_cols(
+        b: &crate::voxel::BlockData,
+        x: usize,
+        y: usize,
+        z: usize,
+        axis_cols: &mut [[[u64; CHUNK_SIZE]; CHUNK_SIZE]; 3],
+    ) {
+        if b.block_type.is_solid() {
+            // x,z - y axis
+            if z >= 0 && z < CHUNK_SIZE && x >= 0 && x < CHUNK_SIZE {
+                axis_cols[0][z][x] |= 1u64 << (y + 1) as u64;
+            }
+            // z,y - x axis
+            if y >= 0 && y < CHUNK_SIZE && z >= 0 && z < CHUNK_SIZE {
+                axis_cols[1][y][z] |= 1u64 << (x + 1) as u64;
+            }
+            // x,y - z axis
+            if y >= 0 && y < CHUNK_SIZE && x >= 0 && x < CHUNK_SIZE {
+                axis_cols[2][y][x] |= 1u64 << (z + 1) as u64;
+            }
         }
     }
 
@@ -55,37 +79,50 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
                     1 => 0,
                     _ => (z * CHUNK_SIZE + y) * CHUNK_SIZE + x,
                 };
-                add_voxel_to_axis_cols(&chunk.voxels[i], x + 1, y + 1, z + 1, &mut axis_cols)
+                add_voxel_to_axis_cols(&chunk.voxels[i], x, y, z, &mut axis_cols)
             }
         }
     }
 
     // neighbor chunk voxels.
-    // note(leddoo): couldn't be bothered to optimize these.
-    //  might be worth it though. together, they take
-    //  almost as long as the entire "inner chunk" loop.
-    for z in [0, CHUNK_SIZE_P - 1] {
+    // Process z-static faces (front and back) (<0-31>,<0-31>,0), (<0-31>,<0-31>,31)
+    for x in 0..CHUNK_SIZE_P {
         for y in 0..CHUNK_SIZE_P {
-            for x in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
+            let pos = ivec3(x as i32, y as i32, 0) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos), pos.x, pos.y, pos.z, &mut axis_cols);
         }
     }
-    for z in 0..CHUNK_SIZE_P {
-        for y in [0, CHUNK_SIZE_P - 1] {
-            for x in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
+    for x in 0..CHUNK_SIZE_P {
+        for y in 0..CHUNK_SIZE_P {
+            let pos = ivec3(x as i32, y as i32, CHUNK_SIZE_P - 1) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos), pos.x, pos.y, pos.z, &mut axis_cols);
         }
     }
-    for z in 0..CHUNK_SIZE_P {
-        for x in [0, CHUNK_SIZE_P - 1] {
-            for y in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
+    
+    // Process x-static faces (left and right) (0,<0-31>,<1-30>), (31,<0-31>,<1-30>). Skip corners (already processed)
+    for z in [1, CHUNK_SIZE_P - 1] {
+        for y in 0..CHUNK_SIZE_P {
+            let pos = ivec3(0, y as i32, z as i32) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos), pos.x, pos.y, pos.z, &mut axis_cols);
+        }
+        for y in 0..CHUNK_SIZE_P {
+            let pos = ivec3(CHUNK_SIZE_P - 1, y as i32, z as i32) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos), pos.x, pos.y, pos.z, &mut axis_cols);
+        }
+    }
+    
+    
+    // Process y-static faces (top and bottom) (<1-30>,0,<1-30>), (<1-30>,31,<1-30>). Skip corners (already processed)
+    for z in [1, CHUNK_SIZE_P - 1] {
+        for x in [1, CHUNK_SIZE_P - 1] {
+            std::forward<F>(callback)(vec3u{ x, 0, z });
+            std::forward<F>(callback)(vec3u{ x, ExtentMask, z });
+            
+            let pos_t = ivec3(x as i32, 0, z as i32) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos_t), pos_t.x, pos_t.y, pos_t.z, &mut axis_cols);
+            
+            let pos_b = ivec3(x as i32, CHUNK_SIZE_P - 1, z as i32) - IVec3::ONE;
+            add_neighbour_voxel_to_axis_cols(chunks_refs.get_block(pos_b), pos_b.x, pos_b.y, pos_b.z, &mut axis_cols);
         }
     }
 
@@ -103,8 +140,8 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     for axis in 0..3 {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                // set if current is solid, and next is air, skip padded (x+1 and z+1 for x/z padding)
-                let col = axis_cols[axis][z + 1][x + 1];
+                // set if current is solid, and next is air
+                let col = axis_cols[axis][z][x];
 
                 // sample descending axis, and set true when air meets solid
                 col_face_masks[2 * axis + 0][z][x] = remove_padding(col & !(col << 1));
