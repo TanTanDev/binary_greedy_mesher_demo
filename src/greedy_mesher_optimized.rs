@@ -25,7 +25,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
 
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
-    let mut col_face_masks = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+    let mut col_face_masks = [[[0u32; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
 
     #[inline]
     fn add_voxel_to_axis_cols(
@@ -89,6 +89,16 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
         }
     }
 
+    #[inline]
+    fn remove_padding(col: u64) {
+        // removes the right most padding value, because it's invalid
+        col >>= 1;
+        // removes the left most padding value, because it's invalid
+        col &= !(1 << CHUNK_SIZE as u64);
+
+        return col as u32;
+    }
+
     // face culling
     for axis in 0..3 {
         for z in 0..CHUNK_SIZE_P {
@@ -97,9 +107,9 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
                 let col = axis_cols[axis][z][x];
 
                 // sample descending axis, and set true when air meets solid
-                col_face_masks[2 * axis + 0][z][x] = col & !(col << 1);
+                col_face_masks[2 * axis + 0][z][x] = remove_padding(col & !(col << 1));
                 // sample ascending axis, and set true when air meets solid
-                col_face_masks[2 * axis + 1][z][x] = col & !(col >> 1);
+                col_face_masks[2 * axis + 1][z][x] = remove_padding(col & !(col >> 1));
             }
         }
     }
@@ -125,11 +135,6 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
             for x in 0..CHUNK_SIZE {
                 // skip padded by adding 1(for x padding) and (z+1) for (z padding)
                 let mut col = col_face_masks[axis][z + 1][x + 1];
-
-                // removes the right most padding value, because it's invalid
-                col >>= 1;
-                // removes the left most padding value, because it's invalid
-                col &= !(1 << CHUNK_SIZE as u64);
 
                 while col != 0 {
                     let y = col.trailing_zeros();
