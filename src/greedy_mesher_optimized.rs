@@ -25,7 +25,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
 
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
-    let mut col_face_masks = [[[0u32; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+    let mut col_face_masks = [[[0u32; CHUNK_SIZE]; CHUNK_SIZE]; 6];
 
     #[inline]
     fn add_voxel_to_axis_cols(
@@ -101,10 +101,10 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
 
     // face culling
     for axis in 0..3 {
-        for z in 0..CHUNK_SIZE_P {
-            for x in 0..CHUNK_SIZE_P {
-                // set if current is solid, and next is air
-                let col = axis_cols[axis][z][x];
+        for z in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                // set if current is solid, and next is air, skip padded (x+1 and z+1 for x/z padding)
+                let col = axis_cols[axis][z + 1][x + 1];
 
                 // sample descending axis, and set true when air meets solid
                 col_face_masks[2 * axis + 0][z][x] = remove_padding(col & !(col << 1));
@@ -133,8 +133,7 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     for axis in 0..6 {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                // skip padded by adding 1(for x padding) and (z+1) for (z padding)
-                let mut col = col_face_masks[axis][z + 1][x + 1];
+                let mut col = col_face_masks[axis][z][x];
 
                 while col != 0 {
                     let y = col.trailing_zeros();
