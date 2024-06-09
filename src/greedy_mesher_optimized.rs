@@ -61,31 +61,22 @@ pub fn build_chunk_mesh(chunks_refs: &ChunksRefs, lod: Lod) -> Option<ChunkMesh>
     }
 
     // neighbor chunk voxels.
-    // note(leddoo): couldn't be bothered to optimize these.
-    //  might be worth it though. together, they take
-    //  almost as long as the entire "inner chunk" loop.
-    for z in [0, CHUNK_SIZE_P - 1] {
-        for y in 0..CHUNK_SIZE_P {
-            for x in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
-        }
-    }
-    for z in 0..CHUNK_SIZE_P {
-        for y in [0, CHUNK_SIZE_P - 1] {
-            for x in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
-        }
-    }
-    for z in 0..CHUNK_SIZE_P {
-        for x in [0, CHUNK_SIZE_P - 1] {
-            for y in 0..CHUNK_SIZE_P {
-                let pos = ivec3(x as i32, y as i32, z as i32) - IVec3::ONE;
-                add_voxel_to_axis_cols(chunks_refs.get_block(pos), x, y, z, &mut axis_cols);
-            }
+    for a in 1..CHUNK_SIZE_P-1 {
+        for b in 1..CHUNK_SIZE_P-1 {
+            let nx = ivec3(-1i32, a as i32, b as i32);
+            let px = ivec3(CHUNK_SIZE_P as i32, a as i32, b as i32);
+            add_voxel_to_axis_cols(chunks_refs.get_block(nx), 0, a, b, &mut axis_cols);
+            add_voxel_to_axis_cols(chunks_refs.get_block(px), CHUNK_SIZE_P - 1, a, b, &mut axis_cols);
+
+            let ny = ivec3(a as i32, -1i32, b as i32);
+            let py = ivec3(a as i32, CHUNK_SIZE_P as i32, b as i32);
+            add_voxel_to_axis_cols(chunks_refs.get_block(ny), a, 0usize, b, &mut axis_cols);
+            add_voxel_to_axis_cols(chunks_refs.get_block(py), a, CHUNK_SIZE_P - 1, b, &mut axis_cols);
+
+            let nz = ivec3(a as i32, b as i32, -1i32);
+            let pz = ivec3(a as i32, b as i32, CHUNK_SIZE_P as i32);
+            add_voxel_to_axis_cols(chunks_refs.get_block(nz), a, b, 0, &mut axis_cols);
+            add_voxel_to_axis_cols(chunks_refs.get_block(pz), a, b, CHUNK_SIZE_P - 1, &mut axis_cols);
         }
     }
 
